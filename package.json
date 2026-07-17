@@ -1,0 +1,31 @@
+{
+  "name": "viderstand",
+  "version": "0.1.0",
+  "description": "Measure what you cannot see: turn browser animations into numbers an AI (or CI) can reason about — duration, easing curves, velocity, spring physics, dropped frames.",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "viderstand": "bin/viderstand.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "test:unit": "node --test test/easing.test.js test/analyze.test.js",
+    "demo": "node bin/viderstand.js examples/fixture.html --selector '#box' --trigger 'click:#slide'"
+  },
+  "keywords": [
+    "animation",
+    "easing",
+    "playwright",
+    "testing",
+    "measurement",
+    "ai-feedback",
+    "motion"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "playwright-core": "^1.49.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

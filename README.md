@@ -1,1 +1,157 @@
 # viderstand
+
+**Measure what you cannot see.** Turn browser animations into numbers an AI agent
+(or a CI pipeline) can reason about: duration, easing curves, velocity, spring
+physics, and dropped frames — instead of squinting at screenshots.
+
+## The problem
+
+AI coding agents get visual feedback through screenshots. A screenshot is a
+single frame: it can prove an element *ended up* in the right place, but it can
+never tell you that the transition took 900ms instead of 300ms, that the easing
+is `linear` when the design called for `ease-out`, or that the browser dropped
+half the frames along the way. Motion is a function of time, and a screenshot
+integrates time away. Even a video is barely better for an agent — it's a pile
+of pixels that still has to be turned back into numbers before any judgment is
+possible.
+
+## The idea
+
+Don't watch the animation. **Instrument it.**
+
+The browser already knows, on every single frame, the exact computed value of
+every animatable property. viderstand injects a probe that samples the target
+element once per `requestAnimationFrame` — transform matrix (decomposed into
+translation, scale, rotation), geometry, opacity, plus any CSS property you ask
+for. That produces a time series. From the time series, everything a human eye
+judges qualitatively becomes a quantity:
+
+| What a human sees | What viderstand measures |
+| --- | --- |
+| "feels slow" | segment duration in ms, per property |
+| "the easing looks wrong" | best-fit `cubic-bezier(x1, y1, x2, y2)` + closest named easing with RMSE |
+| "it's bouncy" | overshoot %, oscillation count, settle time |
+| "it stutters" | real fps, dropped frames, worst frame time |
+| "it moved too far" | travel distance, start/end values |
+
+Two more pieces close the loop:
+
+1. **Declared vs. observed.** The probe also snapshots the Web Animations API
+   (`document.getAnimations()`) — what the page *claims* the animation is
+   (duration, easing, keyframes). The report compares intent with measurement,
+   which catches an entire class of bugs (transition overridden by another
+   rule, animation applied to the wrong property, delay eating the duration).
+2. **Text-native output.** Reports render curves as sparklines and ASCII plots,
+   so a text-only agent can literally see the shape of the motion, and
+   `--json` emits the raw measurements for programmatic feedback loops.
+
+The result is a closed loop for AI-driven motion work: the agent writes CSS,
+runs `viderstand`, reads *"350ms, closest easing ease-in (rmse 0.19), expected
+ease-out"*, fixes the code, and re-measures — no human eyeball required.
+
+## Install
+
+```sh
+npm install viderstand
+# Chromium via playwright-core; set VIDERSTAND_CHROMIUM or pass
+# executablePath if your browser lives somewhere unusual.
+```
+
+## CLI
+
+```sh
+viderstand http://localhost:3000 --selector '.modal' --trigger 'click:#open'
+viderstand examples/fixture.html --selector '#box' --trigger 'click:#slide' --json report.json
+```
+
+Output:
+
+```
+viderstand: 76 frames over 1249.9ms, 2 animated properties
+frames: 60fps avg (median frame 16.7ms, worst 16.7ms) — smooth
+
+  tx: 0px → 240px (240px) in 400ms, starting at t+166.7ms
+    peak velocity: 1029.9px/s
+    easing ≈ ease-in-out (rmse 0.0001); free fit cubic-bezier(0.42, 0, 0.58, 1) (rmse 0.0001)
+    declared: 400ms / ease-in-out — measured matches declared timing
+    progress: ▁▁▁▁▁▁▁▁▁▁▁▁▂▂▂▂▂▂▃▃▃▃▄▄▅▅▅▆▆▆▆▇▇▇▇▇▇███████████
+```
+
+Triggers: `click:<sel>`, `hover:<sel>`, `focus:<sel>`, `js:<expression>`, or
+`none` to record whatever is already animating.
+
+## API
+
+```js
+import { measure } from 'viderstand';
+
+const { analysis, report, json } = await measure({
+  url: 'http://localhost:3000',
+  selector: '.modal',
+  trigger: 'click:#open',   // or async (page) => { ... } with the Playwright page
+  maxDuration: 4000,        // recording cap (ms)
+  idleMs: 600,              // auto-stop after this much stillness
+  properties: ['border-radius'], // extra numeric CSS properties to sample
+});
+
+console.log(report); // human/agent-readable text
+```
+
+### Animation specs as tests
+
+```js
+import { record, analyze, firstSegment, expectAnimation, expectFrames } from 'viderstand';
+
+const analysis = analyze(await record({ url, selector: '.modal', trigger: 'click:#open' }));
+
+expectAnimation(firstSegment(analysis, 'ty'))
+  .toHaveDuration(300, { tolerance: 30 })
+  .toMatchEasing('ease-out')
+  .toTravel(24, { tolerance: 2 });
+
+expectFrames(analysis).toHaveNoDroppedFrames().toAverageAtLeast(55);
+```
+
+Failures explain themselves in measured terms:
+
+> `expected easing "ease-out" but measured curve is closest to "linear" (rmse 0.021); free fit: cubic-bezier(0.11, 0.09, 0.9, 0.92)`
+
+### Bring your own samples
+
+The analysis layer is decoupled from the recorder. If you can produce
+`[{ t, someNumber, ... }]` frames from any source — a React Native harness, a
+game engine, a canvas app — `analyze({ samples })` gives you the same
+segmentation, easing recovery, and frame stats.
+
+## How the measurements work
+
+- **Segmentation** — each property's series is scanned for contiguous runs of
+  frame-to-frame change above a per-channel noise floor; brief single-frame
+  stalls are merged, real gaps split into separate segments.
+- **Easing recovery** — a segment is normalized to (time 0..1, progress 0..1)
+  and compared against a table of named curves (CSS's five plus common
+  design-system beziers); a free `cubic-bezier` is also fitted with
+  Nelder-Mead, multi-started from every named curve. If a named curve explains
+  the data about as well as the free fit, it's reported by name with
+  confidence; otherwise you get the fitted parameters.
+- **Springs** — progress that overshoots 1.0 is analyzed for overshoot ratio,
+  oscillation count (extrema outside a 2% settle band), and settle time
+  instead of being force-fitted to a bezier.
+- **Frame pacing** — `requestAnimationFrame` timestamps are the compositor's
+  own record of what it delivered; deltas beyond 1.5× the median frame count
+  as dropped.
+
+## Development
+
+```sh
+npm test           # unit + real-browser integration tests
+npm run test:unit  # synthetic-data tests only, no browser needed
+npm run demo       # measure the bundled fixture
+```
+
+## Roadmap
+
+- Color-channel interpolation measurement (parse computed colors into Lab)
+- Multi-element choreography (stagger timing between siblings)
+- Scroll-linked animation support (sample against scroll position, not time)
+- CDP `Compositor` counters for jank attribution (main thread vs raster)
