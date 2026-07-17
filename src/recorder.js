@@ -3,9 +3,10 @@
  * trigger, waits for motion to settle, and returns raw samples plus the
  * page's declared animation intent (Web Animations API).
  */
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { resolve as resolvePath } from 'node:path';
+import { join, resolve as resolvePath } from 'node:path';
 import { chromium } from 'playwright-core';
 import { installProbe } from './probe.js';
 import { installSceneProbe } from './scene-probe.js';
@@ -14,8 +15,46 @@ import { film } from './film.js';
 function resolveChromiumExecutable(explicit) {
   if (explicit) return explicit;
   if (process.env.VIDERSTAND_CHROMIUM) return process.env.VIDERSTAND_CHROMIUM;
-  const known = ['/opt/pw-browsers/chromium'];
-  for (const p of known) {
+
+  const candidates = ['/opt/pw-browsers/chromium']; // Claude Code cloud sandbox
+  // Any Playwright-managed chromium, newest revision first.
+  const home = homedir();
+  for (const cache of [
+    process.env.PLAYWRIGHT_BROWSERS_PATH,
+    join(home, '.cache', 'ms-playwright'),
+    join(home, 'Library', 'Caches', 'ms-playwright'),
+    join(home, 'AppData', 'Local', 'ms-playwright'),
+  ]) {
+    if (!cache) continue;
+    let dirs = [];
+    try {
+      dirs = readdirSync(cache)
+        .filter((d) => /^chromium-\d+$/.test(d))
+        .sort()
+        .reverse();
+    } catch {
+      continue;
+    }
+    for (const d of dirs) {
+      candidates.push(
+        join(cache, d, 'chrome-linux', 'chrome'),
+        join(cache, d, 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+        join(cache, d, 'chrome-mac-arm64', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+        join(cache, d, 'chrome-win', 'chrome.exe')
+      );
+    }
+  }
+  // System browsers as a last resort.
+  candidates.push(
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium'
+  );
+
+  for (const p of candidates) {
     if (existsSync(p)) return p;
   }
   return undefined; // let playwright-core resolve its own installation

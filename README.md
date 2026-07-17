@@ -51,11 +51,30 @@ ease-out"*, fixes the code, and re-measures — no human eyeball required.
 
 ## Install
 
+**As an agent skill** (Claude Code, Cursor, and other SKILL.md-aware agents) — one line:
+
 ```sh
-npm install viderstand
-# Chromium via playwright-core; set VIDERSTAND_CHROMIUM or pass
-# executablePath if your browser lives somewhere unusual.
+npx skills add OppositeX/viderstand
 ```
+
+That installs this repo (it has a root `SKILL.md`) into the agent's skills
+directory; the skill file tells the agent how to set up and drive every mode.
+Manual equivalent, or for agents without the `skills` CLI:
+
+```sh
+git clone https://github.com/OppositeX/viderstand ~/.claude/skills/viderstand && npm install --omit=dev --prefix ~/.claude/skills/viderstand
+```
+
+**As a library/CLI:**
+
+```sh
+npm install viderstand           # in a project
+npx -y github:OppositeX/viderstand --help   # or run straight from git, no install
+```
+
+Chromium is auto-detected: `VIDERSTAND_CHROMIUM` env var, the Claude Code
+cloud sandbox browser, any Playwright browser cache, or a system
+Chrome/Chromium. If none exists, `npx playwright install chromium` once.
 
 ## CLI
 
