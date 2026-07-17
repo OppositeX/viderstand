@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve as resolvePath } from 'node:path';
 import { chromium } from 'playwright-core';
 import { installProbe } from './probe.js';
+import { installSceneProbe } from './scene-probe.js';
 
 function resolveChromiumExecutable(explicit) {
   if (explicit) return explicit;
@@ -104,6 +105,58 @@ export async function record(options) {
     // Let the animation start, then snapshot declared intent while it's live.
     await page.waitForTimeout(60);
     await page.evaluate(() => window.__viderstand.captureDeclared());
+
+    const started = Date.now();
+    while (Date.now() - started < maxDuration) {
+      await page.waitForTimeout(100);
+      const status = await page.evaluate(() => window.__viderstand.status());
+      if (status.now - status.lastChangeT > idleMs) break;
+    }
+
+    return await page.evaluate(() => window.__viderstand.stop());
+  } finally {
+    await browser.close();
+  }
+}
+
+/**
+ * Record the whole scene with the self-updating observer: no selector
+ * needed — every element that animates is discovered and sampled. Use this
+ * when replicating a reference and you can't know in advance what moves.
+ *
+ * Options are the same as record() minus `selector`/`properties`, plus:
+ * @param {string} [options.root]         Subtree to observe (default body).
+ * @param {number} [options.maxElements]  Cap on tracked elements.
+ * @returns {Promise<{elements: {key, frames}[], ticks: number[], warnings: string[]}>}
+ */
+export async function recordScene(options) {
+  const {
+    url,
+    root,
+    trigger = 'none',
+    maxDuration = 4000,
+    idleMs = 600,
+    maxElements,
+    viewport = { width: 1280, height: 720 },
+    executablePath,
+    setup,
+  } = options;
+  if (!url) throw new Error('viderstand: recordScene() requires url');
+
+  const browser = await chromium.launch({
+    executablePath: resolveChromiumExecutable(executablePath),
+    args: ['--disable-lcd-text', '--force-device-scale-factor=1'],
+  });
+  try {
+    const page = await browser.newPage({ viewport });
+    await page.goto(toUrl(url), { waitUntil: 'load' });
+    if (setup) await setup(page);
+    if (root) await page.waitForSelector(root, { state: 'attached' });
+
+    await page.evaluate(installSceneProbe, { root, maxElements });
+    await page.waitForTimeout(120);
+
+    await runTrigger(page, trigger);
 
     const started = Date.now();
     while (Date.now() - started < maxDuration) {

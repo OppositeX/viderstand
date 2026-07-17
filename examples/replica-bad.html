@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>viderstand bad replica</title>
+<style>
+  body { font-family: system-ui, sans-serif; padding: 40px; }
+  .card { width: 70px; height: 70px; border-radius: 10px; margin-bottom: 16px; }
+  /* Deliberately wrong on three axes vs reference.html:
+     #a: 700ms instead of 400ms; #b: linear instead of ease-out; #c: never animates. */
+  #a { background: #4f6df5; transition: transform 700ms ease-in-out; }
+  #b { background: #f5734f; transition: opacity 250ms linear 100ms; }
+  #c { background: #3fae62; }
+  body.go #a { transform: translateX(240px); }
+  body.go #b { opacity: 0.2; }
+</style>
+</head>
+<body>
+  <div class="card" id="a"></div>
+  <div class="card" id="b"></div>
+  <div class="card" id="c"></div>
+  <button id="play" onclick="document.body.classList.toggle('go')">play</button>
+</body>
+</html>
