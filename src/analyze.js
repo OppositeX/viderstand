@@ -91,6 +91,14 @@ function analyzeSegment(times, values, seg) {
   const spring = analyzeSpring(points);
   const easing = spring.isSpring ? null : classifyEasing(points);
 
+  // Raw frame-by-frame values (ms from segment start). Kept in JSON output as
+  // context: two motions with similar frame profiles are similar movements,
+  // even when summary numbers differ.
+  const frameData = [];
+  for (let i = startIdx; i <= endIdx; i++) {
+    frameData.push({ ms: Math.round((times[i] - t0) * 10) / 10, v: Math.round(values[i] * 100) / 100 });
+  }
+
   return {
     startMs: Math.round(t0 * 10) / 10,
     durationMs: Math.round(duration * 10) / 10,
@@ -101,7 +109,17 @@ function analyzeSegment(times, values, seg) {
     easing,
     spring,
     points,
+    frameData: subsample(frameData, 80),
   };
+}
+
+/** Evenly thin an array to at most max entries, always keeping the last. */
+export function subsample(arr, max) {
+  if (arr.length <= max) return arr;
+  const out = [];
+  const step = (arr.length - 1) / (max - 1);
+  for (let i = 0; i < max; i++) out.push(arr[Math.round(i * step)]);
+  return out;
 }
 
 /**

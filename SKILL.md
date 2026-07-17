@@ -60,6 +60,12 @@ frames: 60fps avg — smooth
 - `DRIFTS +Nms from declared` means the CSS says one duration but the pixels
   did another — a delay, an overriding rule, or a wrong property.
 - Dropped frames / worst frame time expose jank no screenshot can show.
+- Film reports end with a **motion signature** (a sparkline of change-per-frame)
+  and a **motion timeline** (per-frame `ms  Δpixels  center`), and every JSON
+  segment carries `frameData` (per-frame timestamps + values). Use these to
+  notice similar movements: two motions with the same signature/frame profile
+  are the same movement even at different durations, and a divergence's first
+  bad frame tells you where in the animation to look.
 
 ## The tuning loop
 

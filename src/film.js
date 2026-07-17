@@ -18,6 +18,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { classifyEasing, cubicBezier } from './easing.js';
+import { sparkline } from './report.js';
+import { subsample } from './analyze.js';
 
 // Grid used for the spatial activity signature.
 const GX = 12;
@@ -192,6 +194,20 @@ export function analyzeFilmPairs(pairs, { activeRatio = 0.0006, gapMs = 120 } = 
     .filter((p) => p.cx !== null)
     .map((p) => ({ u: Math.min(1, (p.t1 - main.start) / duration), cx: p.cx, cy: p.cy }));
 
+  // Frame-by-frame motion data across the whole active window: how much
+  // changed and where its center was, per frame. This is the movement's raw
+  // shape — two recordings with similar frameData are similar movements even
+  // when their summary numbers differ.
+  const frameData = subsample(
+    active.map((p) => ({
+      ms: Math.round(p.t1 - active[0].t0),
+      changedPct: Math.round((p.changed / p.total) * 10000) / 100,
+      cx: p.cx === null ? null : Math.round(p.cx * 1000) / 1000,
+      cy: p.cy === null ? null : Math.round(p.cy * 1000) / 1000,
+    })),
+    120
+  );
+
   return {
     moved: true,
     frames: pairs.length + 1,
@@ -203,6 +219,10 @@ export function analyzeFilmPairs(pairs, { activeRatio = 0.0006, gapMs = 120 } = 
     points,
     activityMap,
     centroidPath,
+    frameData,
+    // Motion signature: change-per-frame over the active window, as a
+    // sparkline. Same rhythm ⇒ same-looking signature, at any duration.
+    signature: sparkline(active.map((p) => p.changed / p.total), 32),
     peakChangedRatio: Math.max(...active.map((p) => p.changed / p.total)),
   };
 }
@@ -361,12 +381,27 @@ export function renderFilmReport(analysis) {
     .slice(0, 4)
     .map(([name, share]) => `${name} ${Math.round(share * 100)}%`);
   out.push(`activity regions: ${hot.join(', ')}`);
+  out.push(`motion signature: ${analysis.signature}`);
+
+  // Frame-by-frame context: when the scene moved, how much, and where its
+  // center was — the movement's raw shape for matching against other films.
+  out.push('motion timeline (ms  Δpixels  center):');
+  for (const f of subsample(analysis.frameData, 18)) {
+    const at = f.cx === null ? '' : `  @(${f.cx.toFixed(2)}, ${f.cy.toFixed(2)})`;
+    out.push(`  +${String(f.ms).padStart(4)}ms  ${f.changedPct.toFixed(2)}%${at}`);
+  }
   return out.join('\n');
 }
 
-export function renderFilmCompare(cmp) {
+export function renderFilmCompare(cmp, refAnalysis, repAnalysis) {
   const out = [];
   out.push(`visual replication score: ${Math.round(cmp.score * 100)}%`);
+  if (refAnalysis?.signature && repAnalysis?.signature) {
+    // Aligned motion signatures: similar movements look similar here even
+    // before reading any verdict.
+    out.push(`  reference motion: ${refAnalysis.signature} (${refAnalysis.activeMs}ms)`);
+    out.push(`  replica motion:   ${repAnalysis.signature} (${repAnalysis.activeMs}ms)`);
+  }
   if (cmp.issues.length === 0) {
     out.push('  ✓ motion timing, easing, location, and path all match the reference');
   }

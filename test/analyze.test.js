@@ -78,6 +78,12 @@ test('analyze measures duration, distance, and easing of synthetic motion', () =
 
   // Only tx should register as animated.
   assert.deepEqual(Object.keys(analysis.channels), ['tx']);
+
+  // Frame-by-frame values ride along for movement matching.
+  assert.ok(seg.frameData.length > 5);
+  assert.equal(seg.frameData[0].ms, 0);
+  assert.ok(Math.abs(seg.frameData[0].v - seg.from) < 1);
+  assert.ok(Math.abs(seg.frameData[seg.frameData.length - 1].v - seg.to) < 1);
 });
 
 test('analyze frame stats on clean 60fps input', () => {
@@ -107,6 +113,7 @@ test('renderReport and toJSON produce sane output', () => {
 
   const json = toJSON(analysis);
   assert.equal(json.channels.tx.segments[0].points, undefined);
+  assert.ok(Array.isArray(json.channels.tx.segments[0].frameData), 'frameData kept in JSON');
   assert.equal(typeof json.channels.tx.segments[0].durationMs, 'number');
 });
 

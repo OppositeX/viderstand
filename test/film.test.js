@@ -60,6 +60,27 @@ test('analyzeFilmPairs measures duration and easing from pixel motion alone', ()
   assert.ok(analysis.centroidPath.length > 5);
   const activeCells = analysis.activityMap.filter((s) => s > 0.01).length;
   assert.ok(activeCells >= 3, 'activity spread across the motion band');
+
+  // Frame-by-frame context for movement matching.
+  assert.ok(analysis.frameData.length > 5, 'frameData present');
+  assert.ok(analysis.frameData.every((f, i, a) => i === 0 || f.ms >= a[i - 1].ms), 'timestamps monotonic');
+  assert.ok(analysis.frameData.some((f) => f.changedPct > 0 && f.cx !== null));
+  assert.match(analysis.signature, /^[▁▂▃▄▅▆▇█]+$/);
+});
+
+test('similar movements produce similar signatures at different durations', () => {
+  const a = analyzeFilmPairs(synthPairs({ duration: 300, easing: NAMED_EASINGS['ease-out'] }));
+  const b = analyzeFilmPairs(synthPairs({ duration: 600, easing: NAMED_EASINGS['ease-out'] }));
+  const c = analyzeFilmPairs(synthPairs({ duration: 300, easing: NAMED_EASINGS['ease-in'] }));
+  const diff = (x, y) => {
+    let d = 0;
+    for (let i = 0; i < x.length; i++) d += Math.abs(x.charCodeAt(i) - y.charCodeAt(i));
+    return d / x.length;
+  };
+  assert.equal(a.signature.length, b.signature.length);
+  // Same easing at double duration reads as the same movement; a reversed
+  // easing profile reads as a different one.
+  assert.ok(diff(a.signature, b.signature) < diff(a.signature, c.signature));
 });
 
 test('analyzeFilmPairs reports stillness as no motion', () => {
@@ -121,10 +142,12 @@ test('compareFilms flags missing motion entirely', () => {
   assert.match(cmp.issues[0].detail, /no motion/);
 });
 
-test('renderFilmCompare reads as verdicts', () => {
+test('renderFilmCompare reads as verdicts with aligned signatures', () => {
   const a = analyzeFilmPairs(synthPairs({ duration: 400 }));
   const b = analyzeFilmPairs(synthPairs({ duration: 750 }));
-  const text = renderFilmCompare(compareFilms(a, b));
+  const text = renderFilmCompare(compareFilms(a, b), a, b);
   assert.match(text, /visual replication score/);
   assert.match(text, /motion spans \d+ms vs reference \d+ms/);
+  assert.match(text, /reference motion: [▁▂▃▄▅▆▇█]+ \(\d+ms\)/);
+  assert.match(text, /replica motion: {3}[▁▂▃▄▅▆▇█]+ \(\d+ms\)/);
 });

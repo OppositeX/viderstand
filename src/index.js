@@ -100,6 +100,6 @@ export async function compareVisual(reference, replica, tolerance) {
     reference: ref,
     replica: rep,
     comparison,
-    report: renderFilmCompare(comparison),
+    report: renderFilmCompare(comparison, ref.analysis, rep.analysis),
   };
 }
