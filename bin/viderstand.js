@@ -6,7 +6,8 @@
  *   viderstand compare <ref-url> <replica-url> [opts]  replication diff
  */
 import { writeFileSync } from 'node:fs';
-import { measure, measureScene, compare } from '../src/index.js';
+import { measure, measureScene, compare, compareVisual, recordFilm } from '../src/index.js';
+import { renderFilmReport } from '../src/film.js';
 import { toJSON } from '../src/report.js';
 
 function parseArgs(argv) {
@@ -34,7 +35,9 @@ const HELP = `viderstand — measure browser animations as numbers, not pixels
 Usage:
   viderstand <url-or-file> --selector <css> [options]   measure one element
   viderstand <url-or-file> --scene [options]            auto-discover everything that animates
-  viderstand compare <reference> <replica> [options]    diff a replica against a reference
+  viderstand film <url-or-file> [options]               screencast filmstrip + pixel-motion analysis
+  viderstand compare <reference> <replica> [options]    diff a replica against a reference (DOM traces)
+  viderstand compare <ref> <replica> --visual [options] diff by pixels only — no selectors, no IDs
 
 Options:
   --selector <css>      Element to observe (single-element mode)
@@ -49,11 +52,15 @@ Options:
   --json [file]         Emit JSON (to stdout, or to a file)
   --points              Include raw progress points in JSON output
   --no-plot             Skip the ASCII curve plot
+  --out <dir>           film/visual modes: save frames + contact-sheet.png there
+  --out-replica <dir>   visual compare: frame output dir for the replica side
+  --visual              compare by screencast pixels instead of DOM traces
 
 Examples:
   viderstand examples/fixture.html --selector '#box' --trigger 'click:#slide'
   viderstand http://localhost:3000 --scene --trigger 'click:#open'
-  viderstand compare https://reference.app http://localhost:3000 --trigger 'click:#play'
+  viderstand film http://localhost:3000 --trigger 'click:#open' --out ./film
+  viderstand compare https://reference.app http://localhost:3000 --visual --trigger 'click:#play'
 `;
 
 function commonOptions(args) {
@@ -90,12 +97,37 @@ async function main() {
       process.exit(1);
     }
     const common = commonOptions(args);
-    const result = await compare(
-      { url: ref, root: args.root, ...common },
-      { url: rep, root: args.root, ...common, trigger: args['trigger-replica'] ?? common.trigger }
-    );
+    const replicaTrigger = args['trigger-replica'] ?? common.trigger;
+    let result;
+    if (args.visual) {
+      result = await compareVisual(
+        { url: ref, ...common, outDir: args.out },
+        { url: rep, ...common, trigger: replicaTrigger, outDir: args['out-replica'] }
+      );
+      if (result.reference.contactSheet) console.error(`reference filmstrip: ${result.reference.contactSheet}`);
+      if (result.replica.contactSheet) console.error(`replica filmstrip: ${result.replica.contactSheet}`);
+    } else {
+      result = await compare(
+        { url: ref, root: args.root, ...common },
+        { url: rep, root: args.root, ...common, trigger: replicaTrigger }
+      );
+    }
     emit(args, result.report, result.comparison);
     process.exit(result.comparison.score === 1 ? 0 : 2);
+  }
+
+  if (args._[0] === 'film') {
+    const target = args._[1];
+    if (!target) {
+      console.error('error: film needs a url\n');
+      console.log(HELP);
+      process.exit(1);
+    }
+    const outDir = typeof args.out === 'string' ? args.out : 'viderstand-film';
+    const result = await recordFilm({ url: target, ...commonOptions(args), outDir });
+    console.error(`frames + contact sheet written to ${result.outDir}`);
+    emit(args, renderFilmReport(result.analysis), result.analysis);
+    return;
   }
 
   const url = args._[0];

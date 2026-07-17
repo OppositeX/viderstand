@@ -9,6 +9,7 @@ import { resolve as resolvePath } from 'node:path';
 import { chromium } from 'playwright-core';
 import { installProbe } from './probe.js';
 import { installSceneProbe } from './scene-probe.js';
+import { film } from './film.js';
 
 function resolveChromiumExecutable(explicit) {
   if (explicit) return explicit;
@@ -20,12 +21,19 @@ function resolveChromiumExecutable(explicit) {
   return undefined; // let playwright-core resolve its own installation
 }
 
-function toUrl(target) {
+export function toUrl(target) {
   if (/^https?:\/\//.test(target) || target.startsWith('file://')) return target;
   return pathToFileURL(resolvePath(target)).href;
 }
 
-async function runTrigger(page, trigger) {
+export function launchBrowser(options = {}) {
+  return chromium.launch({
+    executablePath: resolveChromiumExecutable(options.executablePath),
+    args: ['--disable-lcd-text', '--force-device-scale-factor=1'],
+  });
+}
+
+export async function runTrigger(page, trigger) {
   if (!trigger || trigger === 'none') return;
   if (typeof trigger === 'function') {
     await trigger(page);
@@ -169,4 +177,12 @@ export async function recordScene(options) {
   } finally {
     await browser.close();
   }
+}
+
+/**
+ * Record a film: CDP screencast frames + pixel-derived motion analysis +
+ * a contact-sheet image. Fully identity-free — no selectors involved.
+ */
+export function recordFilm(options) {
+  return film(options, { launchBrowser, toUrl, runTrigger });
 }

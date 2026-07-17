@@ -8,7 +8,13 @@
  *     trigger: 'click:#open',
  *   });
  */
-export { record, recordScene } from './recorder.js';
+export { record, recordScene, recordFilm } from './recorder.js';
+export {
+  analyzeFilmPairs,
+  compareFilms,
+  renderFilmReport,
+  renderFilmCompare,
+} from './film.js';
 export { analyze, findSegments, frameStats } from './analyze.js';
 export {
   analyzeScene,
@@ -32,10 +38,11 @@ export {
   NAMED_EASINGS,
 } from './easing.js';
 
-import { record, recordScene } from './recorder.js';
+import { record, recordScene, recordFilm } from './recorder.js';
 import { analyze } from './analyze.js';
 import { renderReport, toJSON } from './report.js';
 import { analyzeScene, compareScenes, renderSceneReport, renderCompareReport } from './scene.js';
+import { compareFilms, renderFilmCompare } from './film.js';
 
 /**
  * One-shot: record + analyze + render.
@@ -76,5 +83,23 @@ export async function compare(reference, replica, tolerance) {
     replica: repScene,
     comparison,
     report: renderCompareReport(comparison),
+  };
+}
+
+/**
+ * One-shot visual replication check: film both pages via the screencast and
+ * compare pure pixel motion — no selectors, no IDs, works across totally
+ * different markup. Pass outDir on each side to keep the frames and the
+ * contact-sheet filmstrip for viewing.
+ */
+export async function compareVisual(reference, replica, tolerance) {
+  const ref = await recordFilm(reference);
+  const rep = await recordFilm(replica);
+  const comparison = compareFilms(ref.analysis, rep.analysis, tolerance);
+  return {
+    reference: ref,
+    replica: rep,
+    comparison,
+    report: renderFilmCompare(comparison),
   };
 }

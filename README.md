@@ -176,6 +176,56 @@ Elements are matched between the two recordings by their discovered key
 (`#id` or a short CSS path), and tolerances (duration ms/%, easing curve RMSE,
 stagger ms, overshoot) are overridable per call.
 
+### Film mode: it sees for itself (identity-free)
+
+DOM-trace comparison needs matching element identities — and a rebuilt page
+never has the same IDs or markup. Film mode drops the DOM entirely: it
+records what the compositor actually paints, using the CDP **screencast**
+stream (a frame is pushed every time pixels change, with real timestamps —
+much denser than polled screenshots, which would miss most of a 300ms
+animation). The filmstrip then feeds two consumers:
+
+- **The agent's eyes.** A `contact-sheet.png` — a grid of timestamped frames,
+  the animation laid out as a single image a multimodal model can look at.
+- **Numbers from pixels.** Frame-to-frame differencing needs no selectors:
+  pixels changed per frame ≈ motion speed, so the cumulative curve is the
+  scene's easing; changed-pixel centroids trace the motion path; a 12×8
+  activity grid records *where* on screen things moved.
+
+```sh
+viderstand film http://localhost:3000 --trigger 'click:#open' --out ./film
+# → ./film/frame-*.png, ./film/contact-sheet.png, ./film/film.json
+```
+
+```
+film: 27 frames; motion starts at t+155ms and spans 375ms
+scene easing: cubic-bezier(0.348, 0.253, 0.468, 0.818) — closest named ease-out
+activity regions: top-left 54%
+```
+
+Visual comparison works across completely different markup:
+
+```sh
+viderstand compare https://reference.app http://localhost:3000 --visual --trigger 'click:#play'
+```
+
+```
+visual replication score: 75%
+  ✗ motion spans 633ms vs reference 378ms (+255ms)
+```
+
+Verdicts cover overall motion duration, the pixel-derived easing curve,
+where on screen activity happens (with named regions like `top-left` when
+they diverge), and the centroid path shape.
+
+**Choosing a mode:** film mode is the identity-free safety net — it can't be
+fooled by renamed markup, but it measures the scene as a whole. DOM scene
+mode gives sharper per-element verdicts (it separates two elements animating
+in the same screen region) when identities happen to line up. For replication
+work, run the visual compare as the source of truth and read the contact
+sheets side by side; use scene mode's per-element numbers to debug what the
+visual diff flags.
+
 ### Bring your own samples
 
 The analysis layer is decoupled from the recorder. If you can produce
