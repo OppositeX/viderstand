@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>viderstand fixture</title>
+<style>
+  body { font-family: system-ui, sans-serif; padding: 40px; }
+  #box {
+    width: 80px; height: 80px; border-radius: 12px;
+    background: #4f6df5;
+    transition: transform 400ms ease-in-out, opacity 250ms ease-out;
+    will-change: transform, opacity;
+  }
+  #box.slid { transform: translateX(240px); }
+  #box.faded { opacity: 0.2; }
+  button { margin-top: 24px; margin-right: 8px; }
+</style>
+</head>
+<body>
+  <div id="box"></div>
+  <button id="slide" onclick="document.getElementById('box').classList.toggle('slid')">slide (400ms ease-in-out)</button>
+  <button id="fade" onclick="document.getElementById('box').classList.toggle('faded')">fade (250ms ease-out)</button>
+  <button id="spring" onclick="springy()">spring (WAAPI overshoot)</button>
+  <script>
+    function springy() {
+      // Keyframed pseudo-spring: overshoots to 115%, dips, settles at 200px.
+      document.getElementById('box').animate(
+        [
+          { transform: 'translateY(0px)' },
+          { transform: 'translateY(230px)', offset: 0.45 },
+          { transform: 'translateY(188px)', offset: 0.7 },
+          { transform: 'translateY(204px)', offset: 0.85 },
+          { transform: 'translateY(200px)' },
+        ],
+        { duration: 600, easing: 'linear', fill: 'forwards' }
+      );
+    }
+  </script>
+</body>
+</html>
