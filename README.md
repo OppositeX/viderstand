@@ -65,10 +65,10 @@ Manual equivalent, or for agents without the `skills` CLI:
 git clone https://github.com/OppositeX/viderstand ~/.claude/skills/viderstand && npm install --omit=dev --prefix ~/.claude/skills/viderstand
 ```
 
-**As a library/CLI:**
+**As a library/CLI** (not yet published to the npm registry — install from git):
 
 ```sh
-npm install viderstand           # in a project
+npm install github:OppositeX/viderstand     # in a project
 npx -y github:OppositeX/viderstand --help   # or run straight from git, no install
 ```
 
