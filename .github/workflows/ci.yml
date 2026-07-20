@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Integration tests drive a real browser; install the Chromium build
+      # matching the pinned playwright-core into the default Playwright cache,
+      # where viderstand's resolver auto-detects it.
+      - run: PW_VERSION=$(node -p "require('playwright-core/package.json').version") && npx -y playwright@"$PW_VERSION" install --with-deps chromium
+      - run: npm test
